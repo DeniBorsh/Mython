@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <variant>
+#include <list>
 
 namespace parse {
 
@@ -99,40 +100,51 @@ namespace parse {
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T>
         const T& Expect() const {
-            using namespace std::literals;
-            // Заглушка. Реализуйте метод самостоятельно
-            throw LexerError("Not implemented"s);
+            const auto& current_token = CurrentToken();
+            if (current_token.Is<T>()) return current_token.As<T>();
+            else throw LexerError("Wrong expected type for current token");
         }
 
         // Метод проверяет, что текущий токен имеет тип T, а сам токен содержит значение value.
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T, typename U>
-        void Expect(const U& /*value*/) const {
-            using namespace std::literals;
-            // Заглушка. Реализуйте метод самостоятельно
-            throw LexerError("Not implemented"s);
+        void Expect(const U& value) const {
+            const T& expected_token = Expect<T>();
+            if (expected_token.value != value) throw LexerError("Wrong expected value for current token");
         }
 
         // Если следующий токен имеет тип T, метод возвращает ссылку на него.
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T>
         const T& ExpectNext() {
-            using namespace std::literals;
-            // Заглушка. Реализуйте метод самостоятельно
-            throw LexerError("Not implemented"s);
+            NextToken();
+            return Expect<T>();
         }
 
         // Метод проверяет, что следующий токен имеет тип T, а сам токен содержит значение value.
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T, typename U>
-        void ExpectNext(const U& /*value*/) {
-            using namespace std::literals;
-            // Заглушка. Реализуйте метод самостоятельно
-            throw LexerError("Not implemented"s);
+        void ExpectNext(const U& value) {
+            NextToken();
+            return Expect<T, U>(value);
         }
 
     private:
-        // Реализуйте приватную часть самостоятельно
+        std::list<Token> tokens_;
+        std::istream& input_;
+        int current_indent_ = 0;
+        Token eof_{ token_type::Eof() };
+
+        bool CalculateIndent();
+        void AddNumber();
+        void AddString();
+        void AddDoubleChar();
+        void AddKeywordOrId();
+        void RemoveSpaces();
+        bool ReadToken();
+        void AddNewline();
+        void AddChar(char c);
+
     };
 
 }  // namespace parse
