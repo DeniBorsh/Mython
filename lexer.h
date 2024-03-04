@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <variant>
-#include <list>
+#include <vector>
 
 namespace parse {
 
@@ -100,51 +100,50 @@ namespace parse {
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T>
         const T& Expect() const {
-            const auto& current_token = CurrentToken();
-            if (current_token.Is<T>()) return current_token.As<T>();
-            else throw LexerError("Wrong expected type for current token");
+            using namespace std::literals;
+            if (tokens_[id_].Is<T>()) return tokens_[id_].As<T>();
+
+            throw LexerError("Not implemented"s);
         }
 
         // Метод проверяет, что текущий токен имеет тип T, а сам токен содержит значение value.
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T, typename U>
         void Expect(const U& value) const {
-            const T& expected_token = Expect<T>();
-            if (expected_token.value != value) throw LexerError("Wrong expected value for current token");
+            using namespace std::literals;
+            if (!tokens_[id_].Is<T>() || tokens_[id_].As<T>().value != value) throw LexerError("Not implemented"s);
         }
 
         // Если следующий токен имеет тип T, метод возвращает ссылку на него.
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T>
         const T& ExpectNext() {
+            using namespace std::literals;
             NextToken();
-            return Expect<T>();
+            auto& ref = Expect<T>();
+
+            return ref;
         }
 
         // Метод проверяет, что следующий токен имеет тип T, а сам токен содержит значение value.
         // В противном случае метод выбрасывает исключение LexerError
         template <typename T, typename U>
         void ExpectNext(const U& value) {
+            using namespace std::literals;
             NextToken();
-            return Expect<T, U>(value);
+            Expect<T>(value);
         }
 
+        void Parse(std::string& str);
+        void ParseNumber(std::string& str);
+        void ParseString(std::string& str);
+        void ParseID(std::string& str);
+
     private:
-        std::list<Token> tokens_;
-        std::istream& input_;
-        int current_indent_ = 0;
-        Token eof_{ token_type::Eof() };
-
-        bool CalculateIndent();
-        void AddNumber();
-        void AddString();
-        void AddDoubleChar();
-        void AddKeywordOrId();
-        void RemoveSpaces();
-        bool ReadToken();
-        void AddNewline();
-        void AddChar(char c);
-
+        // Реализуйте приватную часть самостоятельно
+        std::vector<Token> tokens_;
+        size_t indent_ = 0;
+        size_t id_ = 0;
     };
 
 }  // namespace parse

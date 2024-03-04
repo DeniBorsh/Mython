@@ -164,3 +164,5 @@ private:
                             << __LINE__;                        \
         Assert(false, __assert_private_os.str());               \
     }
+
+#define EOF_GUARD

@@ -131,9 +131,18 @@
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="lexer_test_open.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="parse.cpp" />
+    <ClCompile Include="parse_test.cpp" />
+    <ClCompile Include="runtime.cpp" />
+    <ClCompile Include="runtime_test.cpp" />
+    <ClCompile Include="statement.cpp" />
+    <ClCompile Include="statement_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.h" />
+    <ClInclude Include="parse.h" />
+    <ClInclude Include="runtime.h" />
+    <ClInclude Include="statement.h" />
     <ClInclude Include="test_runner_p.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

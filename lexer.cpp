@@ -33,7 +33,7 @@ namespace parse {
         return !(lhs == rhs);
     }
 
-    ostream& operator<<(ostream& os, const Token& rhs) {
+    std::ostream& operator<<(std::ostream& os, const Token& rhs) {
         using namespace token_type;
 
 #define VALUED_OUTPUT(type) \
@@ -75,122 +75,168 @@ namespace parse {
         return os << "Unknown token :("sv;
     }
 
-    Lexer::Lexer(istream& input) 
-        : input_{input} {
-        ReadToken();
+    Lexer::Lexer(std::istream& input) {
+        string str;
+        while (getline(input, str)) {
+            if (str.empty()) continue;
+
+            size_t i = 0;
+            while (str[i] == ' ') ++i;
+
+            if (i % 2 == 0) {
+                while (i > indent_) {
+                    tokens_.push_back(token_type::Indent());
+                    indent_ += 2;
+                }
+                while (i < indent_) {
+                    tokens_.push_back(token_type::Dedent());
+                    indent_ -= 2;
+                }
+            }
+            str.erase(0, i);
+
+            if (str[i] == '#') continue;
+            while (!str.empty()) Parse(str);
+
+            tokens_.push_back(token_type::Newline());
+        }
+        while (indent_) {
+            tokens_.push_back(token_type::Dedent());
+            indent_ -= 2;
+        }
+
+        tokens_.push_back(token_type::Eof());
     }
 
     const Token& Lexer::CurrentToken() const {
-        if (tokens_.empty()) return eof_;
-        
-        return tokens_.back();
+        return tokens_[id_];
+
+        throw std::logic_error("Not implemented"s);
     }
 
     Token Lexer::NextToken() {
-        bool added_token = ReadToken();
-        return added_token ? tokens_.back() : eof_;
+        if (id_ + 1 < tokens_.size()) ++id_;
+        return tokens_[id_];
+
+        throw std::logic_error("Not implemented"s);
     }
 
-    bool Lexer::CalculateIndent() {
-        int counter = 0;
-        for (; input_.peek() == ' '; ++counter) input_.get();
+    void Lexer::Parse(string& str) {
+        size_t i = 0;
+        while (i < str.size() && str[i] == ' ')
+            ++i;
+        str.erase(0, i);
 
-        int diff = counter - current_indent_;
-        if (diff == 0) return false;
-        else if (diff % 2 == 0 && diff > 0) { 
-            tokens_.push_back(token_type::Indent{}); 
-            current_indent_ += 2; 
+        if (str[0] == '\'' || str[0] == '\"') {
+            ParseString(str);
         }
-        else if (diff % 2 == 0 && diff < 0) {
-            tokens_.push_back(token_type::Dedent{});
-            current_indent_ -= 2;
+        else if ((str[0] >= '0' && str[0] <= '9') || (str.size() > 1 && str[0] == '-' && str[1] >= '1' && str[1] <= '9')) {
+            ParseNumber(str);
         }
-        else throw LexerError("Indents are not even");
-
-        for (int i = 0; i < counter; ++i) input_.putback(' ');
-        return true;
-    }
-
-    void Lexer::AddNumber() {
-        int num;
-        input_ >> num;
-        tokens_.push_back(token_type::Number{num});
-    }
-
-    void Lexer::AddString() {
-        string str;
-        for (char beg = input_.get(), c; input_.get(c) && ((beg == '\'' && c != '\'') || (beg == '\"' && c != '\"'));) str.push_back(c);
-        tokens_.push_back(token_type::String{ str });
-    }
-
-
-    void Lexer::AddDoubleChar() {
-        char c = input_.get();
-        char next;
-        if (input_ >> next && next == '=') {
-            if (c == '=') tokens_.push_back(token_type::Eq{});
-            if (c == '<') tokens_.push_back(token_type::LessOrEq{});
-            if (c == '>') tokens_.push_back(token_type::GreaterOrEq{});
-            if (c == '!') tokens_.push_back(token_type::NotEq{});
+        else if (str[0] == '_' || (str[0] >= 'a' && str[0] <= 'z') || (str[0] >= 'A' && str[0] <= 'Z') ||
+            (str.size() > 1 && (str.substr(0, 2) == "==" || str.substr(0, 2) == "!=" || str.substr(0, 2) == "<=" || str.substr(0, 2) == ">="))) {
+            ParseID(str);
+        }
+        else if (str[0] != '#') {
+            tokens_.push_back(token_type::Char{ str[0] });
+            str.erase(0, 1);
         }
         else {
-            input_.putback(next);
-            tokens_.push_back(token_type::Char{ c });
+            str.clear();
         }
     }
 
-    void Lexer::AddKeywordOrId() {
-        string keyword;
+    void Lexer::ParseNumber(string& str) {
+        string value;
+        size_t i = 0;
 
-        char c;
-        while (input_.get(c) && (isdigit(c) || isalpha(c) || c == '_')) keyword.push_back(c);
-        input_.putback(c);
+        if (str[0] == '-') {
+            tokens_.push_back(token_type::Char{ '-' });
+            i = 1;
+        }
 
-        if (keyword == "class") tokens_.push_back(token_type::Class{});
-        else if (keyword == "if") tokens_.push_back(token_type::If{});
-        else if (keyword == "else") tokens_.push_back(token_type::Else{});
-        else if (keyword == "or") tokens_.push_back(token_type::Or{});
-        else if (keyword == "and") tokens_.push_back(token_type::And{});
-        else if (keyword == "not") tokens_.push_back(token_type::Not{});
-        else if (keyword == "True") tokens_.push_back(token_type::True{});
-        else if (keyword == "False") tokens_.push_back(token_type::False{});
-        else if (keyword == "None") tokens_.push_back(token_type::None{});
-        else if (keyword == "return") tokens_.push_back(token_type::Return{});
-        else if (keyword == "def") tokens_.push_back(token_type::Def{});
-        else if (keyword == "print") tokens_.push_back(token_type::Print{});
-        else tokens_.push_back(token_type::Id(keyword));
+        while (i < str.size() && str[i] >= '0' && str[i] <= '9') {
+            value += str[i++];
+        }
+        tokens_.push_back(token_type::Number{ stoi(value) });
+        str.erase(0, i);
+
     }
 
-    void Lexer::RemoveSpaces() {
-        char c;
-        while (input_.get(c) && isspace(c));
-        input_.putback(c);
+    void Lexer::ParseString(string& str) {
+        string value;
+        char separate = str[0];
+        size_t i = 1;
+
+        while (i < str.size() && str[i] != separate) {
+            if (str[i] == '\\' && i + 1 < str.size()) {
+                ++i;
+                if (str[i] == 'n')
+                    value += '\n';
+                else if (str[i] == 't')
+                    value += '\t';
+                else if (str[i] == '\'')
+                    value += '\'';
+                else if (str[i] == '\"')
+                    value += '\"';
+                else if (str[i] == '\\')
+                    value += '\\';
+            }
+            else
+                value += str[i];
+            ++i;
+        }
+        tokens_.push_back(token_type::String{ value });
+        str.erase(0, i + 1);
     }
 
-    void Lexer::AddNewline() {
-        input_.get();
-        tokens_.push_back(token_type::Newline{});
-    }
+    void Lexer::ParseID(string& str) {
+        string value;
+        size_t i = 0;
+        while (i < str.size() && str[i] != ' ' && str[i] != '(' && str[i] != ')' && str[i] != ':' && str[i] != ',' && str[i] != '.' && str[i] != '#') {
+            value += str[i++];
+        }
 
-    void Lexer::AddChar(char c) {
-        input_.get();
-        tokens_.push_back(token_type::Char{ c });
-    }
+        if (value == "class")
+            tokens_.push_back(token_type::Class());
+        else if (value == "return")
+            tokens_.push_back(token_type::Return());
+        else if (value == "if")
+            tokens_.push_back(token_type::If());
+        else if (value == "else")
+            tokens_.push_back(token_type::Else());
+        else if (value == "def")
+            tokens_.push_back(token_type::Def());
+        else if (value == "print")
+            tokens_.push_back(token_type::Print());
+        else if (value == "  ")
+            tokens_.push_back(token_type::Indent());
+        else if (value == "  ")
+            tokens_.push_back(token_type::Dedent());
+        else if (value == "and")
+            tokens_.push_back(token_type::And());
+        else if (value == "or")
+            tokens_.push_back(token_type::Or());
+        else if (value == "not")
+            tokens_.push_back(token_type::Not());
+        else if (value == "==")
+            tokens_.push_back(token_type::Eq());
+        else if (value == "!=")
+            tokens_.push_back(token_type::NotEq());
+        else if (value == "<=")
+            tokens_.push_back(token_type::LessOrEq());
+        else if (value == ">=")
+            tokens_.push_back(token_type::GreaterOrEq());
+        else if (value == "None")
+            tokens_.push_back(token_type::None());
+        else if (value == "True")
+            tokens_.push_back(token_type::True());
+        else if (value == "False")
+            tokens_.push_back(token_type::False());
+        else
+            tokens_.push_back(token_type::Id{ value });
 
-    bool Lexer::ReadToken() {
-        if (input_.peek() == EOF) return false;
-        if ((CurrentToken().Is<token_type::Newline>() || 
-             CurrentToken().Is<token_type::Dedent>() ) && CalculateIndent()) return true;
-
-        char c = input_.peek();
-        if (!tokens_.empty() && c == '\n') AddNewline();
-        else if (isalpha(c) || c == '_') AddKeywordOrId();
-        else if (isdigit(c)) AddNumber();
-        else if (c == '\'' || c == '\"') AddString();
-        else if (isspace(c)) { RemoveSpaces(); return ReadToken(); }
-        else if (c == '=' || c == '<' || c == '>' || c == '!') AddDoubleChar();
-        else AddChar(c);
-        return true;
+        str.erase(0, i);
     }
 
 }  // namespace parse
